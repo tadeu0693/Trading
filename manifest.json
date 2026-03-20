@@ -1,0 +1,17 @@
+{
+  "name": "Trading Assistant IA",
+  "short_name": "TradeIA",
+  "description": "Assistente de IA para análise de trading em tempo real",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080c14",
+  "theme_color": "#00e5a0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23080c14'/><text y='140' font-size='120' text-anchor='middle' x='96'>⬡</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
