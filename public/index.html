@@ -197,32 +197,61 @@ const vid=document.getElementById('vid'),cnv=document.getElementById('cnv'),cx=c
   blv=document.getElementById('blv'),bsn=document.getElementById('bsn'),bsh=document.getElementById('bsh');
 
 const TF_CONFIG = {
-  'M1':  { label:'SCALPING · M1',  style:'scalping ultra-curto prazo (M1). Foque em micro-movimentos, tape reading e momentum de curtíssimo prazo. Sinais válidos por 1-3 minutos.' },
-  'M5':  { label:'SCALPING · M5',  style:'scalping de curto prazo (M5). Analise momentum, VWAP, médias rápidas (EMA 9/21). Sinais válidos por 5-15 minutos.' },
-  'M15': { label:'DAY TRADE · M15', style:'day trade (M15). Analise estrutura de mercado, zonas de suporte/resistência e confluências. Sinais válidos por 15-45 minutos.' },
-  'M30': { label:'DAY TRADE · M30', style:'day trade (M30). Analise tendência intraday, pullbacks e zonas de interesse. Sinais válidos por 30-90 minutos.' },
-  'H1':  { label:'SWING · H1',     style:'swing trade (H1). Analise tendência principal, padrões de reversão e continuação. Sinais válidos por horas.' },
-  'H4':  { label:'SWING · H4',     style:'swing trade (H4). Analise macro-tendência, estrutura semanal e zonas premium/discount. Sinais válidos por 1-3 dias.' },
+  'M1':  { label:'SCALPING · M1',  dur:'1-3 candles' },
+  'M5':  { label:'SCALPING · M5',  dur:'2-5 candles' },
+  'M15': { label:'DAY TRADE · M15',dur:'3-8 candles' },
+  'M30': { label:'DAY TRADE · M30',dur:'2-6 candles' },
+  'H1':  { label:'SWING · H1',     dur:'4-12 horas'  },
+  'H4':  { label:'SWING · H4',     dur:'1-3 dias'    },
 };
+
+// Guarda último sinal para evitar flip-flop
+let lastSignal = null;
+let lastSignalCount = 0;
 
 function getPrompt() {
   const cfg = TF_CONFIG[currentTf];
-  return `Você está analisando um gráfico de ${cfg.style}
+  const ctx = lastSignal ? `\n⚠️ CONTEXTO: O último sinal foi ${lastSignal} (confirmado ${lastSignalCount}x). SÓ mude se houver evidência FORTE de reversão.` : '';
 
-Analise considerando APENAS o contexto de ${currentTf}. Responda EXATAMENTE neste formato:
+  return `Você é um trader profissional de Forex analisando price action puro (sem indicadores) no timeframe ${currentTf}.${ctx}
 
-SINAL: [🟢 COMPRA / 🔴 VENDA / 🟡 NEUTRO]
+REGRAS OBRIGATÓRIAS:
+1. Analise a ESTRUTURA completa do gráfico — não apenas os últimos candles
+2. Identifique: tendência maior, últimos topos e fundos, zonas de oferta/demanda
+3. SÓ emita COMPRA ou VENDA se houver pelo menos 2 confluências fortes
+4. Se o mercado estiver lateral ou indefinido → sempre NEUTRO/AGUARDAR
+5. Evite mudar de sinal sem motivo claro — consistência é mais importante que frequência
 
-MOTIVO: [1-2 frases diretas considerando o ${currentTf}]
+CONFLUÊNCIAS VÁLIDAS para Forex price action:
+- Rompimento com fechamento acima/abaixo de zona chave
+- Candle de reversão em zona de suporte/resistência (engolfo, martelo, doji + direção)
+- Pullback para EMA em tendência clara
+- Estrutura de HH+HL (alta) ou LH+LL (baixa) confirmada
+- Falso rompimento (stop hunt) seguido de reversão
 
-DETALHES (${currentTf}):
-- Tendência ${currentTf}: [alta/baixa/lateral]
-- Suporte: [nível]
-- Resistência: [nível]
-- Indicadores: [resumo focado no ${currentTf}]
-- Validade do sinal: [tempo estimado]
+RESPONDA EXATAMENTE neste formato:
 
-⚠️ Análise educacional.`;
+SINAL: [🟢 COMPRA / 🔴 VENDA / 🟡 NEUTRO — AGUARDAR]
+
+CONFIANÇA: [ALTA ✅ / MÉDIA ⚠️ / BAIXA ❌]
+
+CONFLUÊNCIAS:
+• [confluência 1 identificada]
+• [confluência 2 identificada]
+• [confluência 3 se houver]
+
+ESTRUTURA ${currentTf}:
+- Tendência: [alta / baixa / lateral]
+- Último topo: [nível]
+- Último fundo: [nível]
+- Zona de interesse: [nível e motivo]
+
+ENTRADA: [preço ou condição ideal para entrar]
+STOP: [onde invalida o setup]
+ALVO: [alvo realista baseado na estrutura]
+VALIDADE: [${cfg.dur}]
+
+⚠️ Análise educacional — não é recomendação de investimento.`;
 }
 
 function setTf(el) {
@@ -279,12 +308,38 @@ function updateSignal(text){
     ico=document.getElementById('sico'),act=document.getElementById('sact'),
     reason=document.getElementById('sreason'),tm=document.getElementById('stime');
   document.getElementById('sbar').classList.add('show');
-  let tipo='neutral',label='🟡 NEUTRO',emoji='⏸️';
-  if(u.includes('🟢')||u.includes('COMPRA')||u.includes('BUY')){tipo='buy';label='🟢 COMPRAR';emoji='🚀';}
-  else if(u.includes('🔴')||u.includes('VENDA')||u.includes('SELL')){tipo='sell';label='🔴 VENDER';emoji='🔻';}
-  card.className='scard '+tipo;ico.textContent=emoji;act.textContent=label;
-  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>15&&!l.startsWith('SINAL')&&!l.startsWith('⚠️'));
-  reason.textContent=(lines[0]||'').substring(0,130);
+
+  let tipo='neutral',label='🟡 AGUARDAR',emoji='⏸️',newSig='NEUTRO';
+  if(u.includes('🟢')||(/SINAL:.*COMPRA/.test(u))){tipo='buy';label='🟢 COMPRAR';emoji='🚀';newSig='COMPRA';}
+  else if(u.includes('🔴')||(/SINAL:.*VENDA/.test(u))){tipo='sell';label='🔴 VENDER';emoji='🔻';newSig='VENDA';}
+
+  // Rastreia consistência do sinal
+  if(newSig === lastSignal) {
+    lastSignalCount++;
+  } else {
+    lastSignal = newSig;
+    lastSignalCount = 1;
+  }
+
+  // Mostra badge de confiança
+  let confBadge = '';
+  if(u.includes('CONFIANÇA: ALTA')||u.includes('ALTA ✅')) confBadge = ' ✅';
+  else if(u.includes('CONFIANÇA: MÉDIA')||u.includes('MÉDIA ⚠️')) confBadge = ' ⚠️';
+  else if(u.includes('CONFIANÇA: BAIXA')||u.includes('BAIXA ❌')) confBadge = ' ❌';
+
+  card.className='scard '+tipo;
+  ico.textContent=emoji;
+  act.textContent=label+confBadge+(lastSignalCount>1?' (×'+lastSignalCount+')':'');
+
+  // Extrai confluências como motivo
+  const confMatch = text.match(/CONFLUÊNCIAS:([\s\S]*?)(?=ESTRUTURA|ENTRADA|$)/i);
+  if(confMatch) {
+    const bullets = confMatch[1].trim().split('\n').map(l=>l.trim()).filter(l=>l.startsWith('•')||l.startsWith('-'));
+    reason.textContent = bullets.slice(0,2).join(' | ').substring(0,150) || 'Analisando estrutura...';
+  } else {
+    const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>15&&!l.startsWith('SINAL')&&!l.startsWith('⚠️'));
+    reason.textContent=(lines[0]||'').substring(0,150);
+  }
   tm.textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
