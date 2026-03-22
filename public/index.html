@@ -74,6 +74,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 .iopt{padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:var(--bg3);font-family:'Space Mono',monospace;font-size:10px;color:var(--text2);cursor:pointer;transition:all .2s;}
 .iopt.on{background:var(--accent);color:var(--bg);border-color:var(--accent);}
 
+/* TIMEFRAME */
+#tfbar{display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;}
+#tfbar span{font-family:'Space Mono',monospace;font-size:9px;color:var(--text2);flex-shrink:0;letter-spacing:.08em;}
+.tfopt{padding:5px 13px;border-radius:16px;border:1px solid var(--border);background:var(--bg3);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;transition:all .2s;}
+.tfopt:hover{border-color:var(--blue);color:var(--text);}
+.tfopt.on{background:var(--blue);color:white;border-color:var(--blue);box-shadow:0 0 10px rgba(0,87,255,.4);}
+.tf-info{font-family:'Space Mono',monospace;font-size:9px;background:rgba(0,87,255,.12);border:1px solid rgba(0,87,255,.25);border-radius:8px;padding:3px 10px;color:#6699ff;margin-left:auto;flex-shrink:0;}
+
 /* QUICK */
 #qa{display:flex;gap:6px;padding:6px 14px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;background:var(--bg);border-bottom:1px solid var(--border);}
 #qa::-webkit-scrollbar{display:none;}
@@ -150,6 +158,17 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
     <div class="iopt" data-s="120" onclick="setIv(this)">2min</div>
   </div>
 
+
+  <div id="tfbar">
+    <span>TIMEFRAME:</span>
+    <div class="tfopt" data-tf="M1" onclick="setTf(this)">M1</div>
+    <div class="tfopt on" data-tf="M5" onclick="setTf(this)">M5</div>
+    <div class="tfopt" data-tf="M15" onclick="setTf(this)">M15</div>
+    <div class="tfopt" data-tf="M30" onclick="setTf(this)">M30</div>
+    <div class="tfopt" data-tf="H1" onclick="setTf(this)">H1</div>
+    <div class="tfopt" data-tf="H4" onclick="setTf(this)">H4</div>
+    <div class="tf-info" id="tf-info">SCALPING · M5</div>
+  </div>
   <div id="qa">
     <div class="qb" onclick="qa('Tendência atual? Dê o sinal direto: COMPRA, VENDA ou NEUTRO.')">📈 Tendência</div>
     <div class="qb" onclick="qa('Tem sinal agora? Responda primeiro: COMPRA, VENDA ou NEUTRO.')">⚡ Sinal</div>
@@ -171,25 +190,50 @@ header{display:flex;align-items:center;justify-content:space-between;padding:10p
 <div id="toast"></div>
 
 <script>
-let ms=null,live=false,ivS=30,cd=0,cdT=null,busy=false,hist=[];
+let ms=null,live=false,ivS=30,cd=0,cdT=null,busy=false,hist=[],currentTf='M5';
 const vid=document.getElementById('vid'),cnv=document.getElementById('cnv'),cx=cnv.getContext('2d'),
   chat=document.getElementById('chat'),sd=document.getElementById('sd'),st=document.getElementById('st'),
   aov=document.getElementById('aov'),tb=document.getElementById('tbadge'),ph=document.getElementById('ph'),
   blv=document.getElementById('blv'),bsn=document.getElementById('bsn'),bsh=document.getElementById('bsh');
 
-const PROMPT=`Analise o gráfico na tela agora. Responda EXATAMENTE neste formato:
+const TF_CONFIG = {
+  'M1':  { label:'SCALPING · M1',  style:'scalping ultra-curto prazo (M1). Foque em micro-movimentos, tape reading e momentum de curtíssimo prazo. Sinais válidos por 1-3 minutos.' },
+  'M5':  { label:'SCALPING · M5',  style:'scalping de curto prazo (M5). Analise momentum, VWAP, médias rápidas (EMA 9/21). Sinais válidos por 5-15 minutos.' },
+  'M15': { label:'DAY TRADE · M15', style:'day trade (M15). Analise estrutura de mercado, zonas de suporte/resistência e confluências. Sinais válidos por 15-45 minutos.' },
+  'M30': { label:'DAY TRADE · M30', style:'day trade (M30). Analise tendência intraday, pullbacks e zonas de interesse. Sinais válidos por 30-90 minutos.' },
+  'H1':  { label:'SWING · H1',     style:'swing trade (H1). Analise tendência principal, padrões de reversão e continuação. Sinais válidos por horas.' },
+  'H4':  { label:'SWING · H4',     style:'swing trade (H4). Analise macro-tendência, estrutura semanal e zonas premium/discount. Sinais válidos por 1-3 dias.' },
+};
+
+function getPrompt() {
+  const cfg = TF_CONFIG[currentTf];
+  return `Você está analisando um gráfico de ${cfg.style}
+
+Analise considerando APENAS o contexto de ${currentTf}. Responda EXATAMENTE neste formato:
 
 SINAL: [🟢 COMPRA / 🔴 VENDA / 🟡 NEUTRO]
 
-MOTIVO: [1-2 frases diretas]
+MOTIVO: [1-2 frases diretas considerando o ${currentTf}]
 
-DETALHES:
-- Tendência: [alta/baixa/lateral]
+DETALHES (${currentTf}):
+- Tendência ${currentTf}: [alta/baixa/lateral]
 - Suporte: [nível]
 - Resistência: [nível]
-- Indicadores: [resumo]
+- Indicadores: [resumo focado no ${currentTf}]
+- Validade do sinal: [tempo estimado]
 
 ⚠️ Análise educacional.`;
+}
+
+function setTf(el) {
+  document.querySelectorAll('.tfopt').forEach(e => e.classList.remove('on'));
+  el.classList.add('on');
+  currentTf = el.dataset.tf;
+  const cfg = TF_CONFIG[currentTf];
+  document.getElementById('tf-info').textContent = cfg.label;
+  addMsg('ms', '⏱ Timeframe alterado para ' + currentTf + ' — ' + cfg.label);
+  if (live) { stopLive(); setTimeout(startLive, 300); }
+}
 
 async function startShare(){
   try{
@@ -249,7 +293,7 @@ function startLive(){
   document.getElementById('ibar').classList.add('on');
   blv.textContent='⏹ PARAR';blv.classList.add('on');live=true;
   addMsg('ms','⏱ Ao vivo ativado — análise a cada '+ivS+'s');
-  analyze(PROMPT);startCd();
+  analyze(getPrompt());startCd();
 }
 function stopLive(){
   if(cdT){clearInterval(cdT);cdT=null;}
@@ -260,10 +304,10 @@ function stopLive(){
 function startCd(){
   cd=ivS;tb.style.display='block';tb.textContent=cd+'s';
   if(cdT)clearInterval(cdT);
-  cdT=setInterval(()=>{cd--;tb.textContent=cd+'s';if(cd<=0){clearInterval(cdT);if(!busy)analyze(PROMPT);setTimeout(startCd,400);}},1000);
+  cdT=setInterval(()=>{cd--;tb.textContent=cd+'s';if(cd<=0){clearInterval(cdT);if(!busy)analyze(getPrompt());setTimeout(startCd,400);}},1000);
 }
 function setIv(el){document.querySelectorAll('.iopt').forEach(e=>e.classList.remove('on'));el.classList.add('on');ivS=+el.dataset.s;if(live){stopLive();setTimeout(startLive,300);}}
-function doSnap(){addMsg('mu','📸 Analisando...');analyze(PROMPT);}
+function doSnap(){addMsg('mu','📸 Analisando...');analyze(getPrompt());}
 function qa(t){if(!ms){toast('⚠️ Compartilhe a tela primeiro!');return;}addMsg('mu',t);analyze(t);}
 function send(){const i=document.getElementById('mi'),t=i.value.trim();if(!t)return;i.value='';addMsg('mu',t);ms?analyze(t):analyzeText(t);}
 async function analyzeText(t){
